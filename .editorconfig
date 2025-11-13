@@ -1,0 +1,28 @@
+# EditorConfig 是一个很棒的工具: https://EditorConfig.org
+# 用于保持不同编辑器和IDE之间的一致性
+
+# 顶级 EditorConfig 文件
+root = true
+
+# 所有文件的通用设置
+[*]
+# 使用 Unix 风格的换行符 (LF)
+end_of_line = lf
+# 在文件末尾插入换行符
+insert_final_newline = true
+# 删除行尾空白字符
+trim_trailing_whitespace = true
+# 文件编码为 UTF-8
+charset = utf-8
+
+# JavaScript、TypeScript 和 JSON 文件的特定设置
+[*.{js,ts,jsx,tsx,json}]
+# 使用空格缩进
+indent_style = space
+# 缩进大小为 2 个空格
+indent_size = 2
+
+# Markdown 文件的特定设置
+[*.md]
+# Markdown 文件保留行尾空白字符（因为有时双空格用于换行）
+trim_trailing_whitespace = false
