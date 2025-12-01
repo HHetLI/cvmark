@@ -432,7 +432,7 @@ export interface DrawData {
   crosshair?: boolean;
   /** 画笔工具 */
   brushTool?: BrushTool;
-  /** 重绘次数 */
+  /** 重绘图形ID */
   redraw?: number;
   /** 绘制完成回调函数 */
   onDrawDone?: (data: object | null) => void;
@@ -746,6 +746,9 @@ export interface CanvasModel {
   //#endregion
 
   // #region 接口方法-状态查询
+
+  /** 检查是否能够切换帧 */
+  isAbleToChangeFrame(): boolean;
 
   /**
    * 配置画布
@@ -1370,6 +1373,24 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
 
     // 通知画布配置已更新
     this.notify(UpdateReasons.CONFIG_UPDATED);
+  }
+
+  /**
+   * 检查是否能够切换到下一帧
+   * 根据当前画布模式判断是否允许切换帧
+   * @returns 如果可以切换帧返回true，否则返回false
+   */
+  public isAbleToChangeFrame(): boolean {
+    // 检查当前模式是否不允许切换帧
+    const isUnable =
+      [Mode.SLICE, Mode.DRAG, Mode.EDIT, Mode.RESIZE, Mode.INTERACT].includes(
+        this.data.mode
+      ) ||
+      // 如果正在绘制且是重新绘制模式，也不允许切换帧
+      (this.data.mode === Mode.DRAW && typeof this.data.drawData.redraw === "number");
+
+    // 返回是否能够切换帧
+    return !isUnable;
   }
 
   /**

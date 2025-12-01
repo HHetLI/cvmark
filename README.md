@@ -32,6 +32,7 @@ npm run eslint
 
 - `html()` - 获取画布的 HTML 元素
 - `setup()` - 设置画布的帧数据和对象状态
+- `isAbleToChangeFrame()` - 检查是否可以切换帧
 - `draw()` - 绘制图形
 - `edit()` - 编辑图形
 - `merge()` - 合并对象

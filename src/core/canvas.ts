@@ -178,6 +178,12 @@ interface Canvas {
   configure(configuration: Configuration): void;
 
   /**
+   * 检查是否可以切换到下一帧
+   * @returns 是否可以切换帧
+   */
+  isAbleToChangeFrame(): boolean;
+
+  /**
    * 销毁画布，释放资源
    */
   destroy(): void;
@@ -420,6 +426,14 @@ class CanvasImpl implements Canvas {
    */
   public configure(configuration: Configuration): void {
     this.model.configure(configuration);
+  }
+
+  /**
+   * 检查是否可以切换到下一帧
+   * @returns 是否可以切换帧
+   */
+  public isAbleToChangeFrame(): boolean {
+    return this.model.isAbleToChangeFrame();
   }
 
   /**
