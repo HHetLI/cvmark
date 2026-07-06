@@ -85,7 +85,9 @@
 #cvat_canvas_content {
   @extend .cvat_canvas_pixelized;
 
-  filter: contrast(120%) saturate(150%);
+  // contrast : 提高对比度，让颜色更加鲜明，明暗对比更强
+  // saturate : 提高饱和度，让颜色更加鲜艳、浓郁
+  // filter: contrast(120%) saturate(150%);
   position: absolute;
   z-index: 2;
   outline: 10px solid black;

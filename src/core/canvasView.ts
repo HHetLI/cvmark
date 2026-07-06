@@ -760,8 +760,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
           // 设置画布尺寸
           this.background.setAttribute("width", `${media.renderWidth}px`);
           this.background.setAttribute("height", `${media.renderHeight}px`);
-          this.background.style.width = `${media.renderWidth}px`;
-          this.background.style.height = `${media.renderHeight}px`;
+
           // 绘制图像
           if (ctx) {
             ctx.drawImage(media.imageData, 0, 0, media.renderWidth, media.renderHeight);
@@ -782,6 +781,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
           this.videoElement.style.display = "block";
           this.background.style.display = "none";
         }
+        // 更新画布位置、大小和变换
+        this.moveCanvas();
+        this.resizeCanvas();
+        this.transformCanvas();
       } else {
         // 图像正在加载
         this.isImageLoading = true;
