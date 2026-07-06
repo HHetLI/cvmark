@@ -1,12 +1,13 @@
 {
-  "name": "cvmark",
+  "name": "@yandy0725/cvmark",
   "version": "1.0.0",
   "type": "module",
   "description": "a graphic annotation editor based on SVG and Canvas",
   "main": "src/core/canvas.ts",
   "scripts": {
     "lint": "biome lint src/",
-    "format": "biome format --write src/"
+    "format": "biome format --write src/",
+    "test": "echo 'No tests yet — placeholder for future test suite' && exit 0"
   },
   "keywords": [
     "cvmark",
