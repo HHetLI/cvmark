@@ -37,7 +37,7 @@
     "**/*.scss"
   ],
   "dependencies": {
-    "fabric": "^5.2.1",
+    "fabric": "^7.4.0",
     "polylabel": "^1.1.0",
     "svg.draggable.js": "^2.2.2",
     "svg.draw.js": "^2.0.4",
