@@ -53,6 +53,8 @@ import {
 } from "../utils/shared";
 
 import { renderBitmap } from "./bitmapRenderer";
+import { RafCoalescer } from "./rafCoalescer";
+import { zOrderSignature, type ZOrderItem } from "./objectOrder";
 
 import type { CanvasController } from "./canvasController";
 import {
@@ -135,6 +137,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
   private bitmap: HTMLCanvasElement;
   /** 位图重绘请求ID，用于异步竞态保护 */
   private bitmapUpdateReqId: number;
+  /** 画布变换合并器：把高频 move/zoom 合并到单帧 */
+  private transformCoalescer: RafCoalescer;
+  /** 上次对象 Z 序签名，用于跳过不必要的 sortObjects */
+  private lastObjectOrderSignature = "";
   /** SVG内容层，包含所有图形和对象 */
   private content: SVGSVGElement;
   /** SVG.js容器，包含所有内容元素 */
@@ -384,6 +390,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     this.bitmap.setAttribute("id", "cvat_canvas_bitmap");
     this.bitmap.style.display = "none";
     this.bitmapUpdateReqId = 0;
+    this.transformCoalescer = new RafCoalescer();
 
     // 创建视频元素
     this.videoElement = window.document.createElement("video");
@@ -822,18 +829,18 @@ export class CanvasViewImpl implements CanvasView, Listener {
       );
     }
     // 处理图像缩放和适配事件
-    else if ([UpdateReasons.IMAGE_ZOOMED, UpdateReasons.IMAGE_FITTED].includes(reason)) {
-      if (reason === UpdateReasons.IMAGE_FITTED) {
-        // 分发画布适配事件
-        this.canvas.dispatchEvent(
-          new CustomEvent("canvas.fit", {
-            bubbles: false,
-            cancelable: true,
-          })
-        );
-      }
-
-      // 更新画布位置和变换
+    else if (reason === UpdateReasons.IMAGE_ZOOMED) {
+      // 高频缩放：合并到同一 rAF 帧再应用
+      this.scheduleCanvasZoom();
+    } else if (reason === UpdateReasons.IMAGE_FITTED) {
+      // 分发画布适配事件
+      this.canvas.dispatchEvent(
+        new CustomEvent("canvas.fit", {
+          bubbles: false,
+          cancelable: true,
+        })
+      );
+      // 适配是一次性低频操作，直接同步应用
       this.moveCanvas();
       this.transformCanvas();
     }
@@ -844,8 +851,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
     }
     // 处理图像移动事件
     else if (reason === UpdateReasons.IMAGE_MOVED) {
-      // 更新画布位置
-      this.moveCanvas();
+      // 高频拖拽：合并到同一 rAF 帧再应用
+      this.scheduleCanvasMove();
     }
     // 处理对象更新事件
     else if (reason === UpdateReasons.OBJECTS_UPDATED) {
@@ -3258,8 +3265,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
       this.deleteObjects(updatedSkeletons);
       this.addObjects(updatedSkeletons);
 
-      // 对对象进行排序
-      this.sortObjects();
+      // 仅在 Z 序排列实际变化时才重排，避免每次对象更新都做 O(N) DOM 扫描
+      this.sortIfOrderChanged(states);
 
       // 如果控制器有活动元素，重新激活
       if (this.controller.activeElement.clientID !== null) {
@@ -4248,6 +4255,22 @@ export class CanvasViewImpl implements CanvasView, Listener {
    * 根据Z轴顺序排序画布上的对象
    * 确保对象按照正确的层级顺序显示，并将十字准线和交互点置于最顶层
    */
+  /**
+   * 仅当 Z 序排列发生变化时才重排对象，否则直接跳过 O(N) 的 DOM 扫描。
+   * @param states 当前帧所有对象状态（含 zOrder）
+   */
+  private sortIfOrderChanged(states: any[]): void {
+    const signature = zOrderSignature(
+      states.map(
+        (state: any): ZOrderItem => ({ clientID: state.clientID, zOrder: state.zOrder || 0 })
+      )
+    );
+    if (signature !== this.lastObjectOrderSignature) {
+      this.sortObjects();
+      this.lastObjectOrderSignature = signature;
+    }
+  }
+
   private sortObjects(): void {
     // TODO: 可以显著优化此方法
     // 获取所有图形元素及其Z轴顺序
@@ -4821,6 +4844,25 @@ export class CanvasViewImpl implements CanvasView, Listener {
     // 移动画布到新位置
     this.moveCanvas();
   };
+
+  /**
+   * 合并一次移动：把 IMAGE_MOVED 的高频更新合并到下一帧
+   */
+  private scheduleCanvasMove(): void {
+    this.transformCoalescer.request(() => {
+      this.moveCanvas();
+    });
+  }
+
+  /**
+   * 合并一次缩放：把 IMAGE_ZOOMED 的高频更新合并到下一帧
+   */
+  private scheduleCanvasZoom(): void {
+    this.transformCoalescer.request(() => {
+      this.moveCanvas();
+      this.transformCanvas();
+    });
+  }
 
   /**
    * 移动画布方法
