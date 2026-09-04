@@ -32,6 +32,7 @@ npm run format
 
 - `html()` - 获取画布的 HTML 元素
 - `setup()` - 设置画布的帧数据和对象状态
+- `bitmap(enable: boolean)` - 开启/关闭位图栅格化模式（将所有标注对象一次性渲染为二值位图预览）
 - `isAbleToChangeFrame()` - 检查是否可以切换帧
 - `draw()` - 绘制图形
 - `edit()` - 编辑图形

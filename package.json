@@ -7,7 +7,8 @@
   "scripts": {
     "lint": "biome lint src/",
     "format": "biome format --write src/",
-    "test": "echo 'No tests yet — placeholder for future test suite' && exit 0"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "cvmark",
@@ -50,7 +51,9 @@
     "@types/fabric": "^5.3.11",
     "@types/lodash": "^4.17.20",
     "@types/polylabel": "^2.0.0",
-    "typescript": "^7.0.2"
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

@@ -268,6 +268,10 @@ class CanvasImpl implements Canvas {
     this.model.fitCanvas(this.view.html().clientWidth, this.view.html().clientHeight);
   }
 
+  public bitmap(enable: boolean): void {
+    this.model.bitmap(enable);
+  }
+
   /**
    * 启用或禁用区域选择功能
    * @param enable - 是否启用区域选择

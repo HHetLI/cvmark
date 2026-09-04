@@ -52,6 +52,8 @@ import {
   zipChannels,
 } from "../utils/shared";
 
+import { renderBitmap } from "./bitmapRenderer";
+
 import type { CanvasController } from "./canvasController";
 import {
   type ActiveElement,
@@ -129,6 +131,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
   private background: HTMLCanvasElement;
   /** 遮罩内容画布，用于渲染对象遮罩 */
   private masksContent: HTMLCanvasElement;
+  /** 位图栅格化层，用于批量渲染白底标注轮廓 */
+  private bitmap: HTMLCanvasElement;
+  /** 位图重绘请求ID，用于异步竞态保护 */
+  private bitmapUpdateReqId: number;
   /** SVG内容层，包含所有图形和对象 */
   private content: SVGSVGElement;
   /** SVG.js容器，包含所有内容元素 */
@@ -373,6 +379,12 @@ export class CanvasViewImpl implements CanvasView, Listener {
     // 设置主容器ID
     this.canvas.setAttribute("id", "cvat_canvas_wrapper");
 
+    // 创建位图栅格化层（初始隐藏，用于单次批量光栅化所有标注）
+    this.bitmap = window.document.createElement("canvas");
+    this.bitmap.setAttribute("id", "cvat_canvas_bitmap");
+    this.bitmap.style.display = "none";
+    this.bitmapUpdateReqId = 0;
+
     // 创建视频元素
     this.videoElement = window.document.createElement("video");
     this.videoElement.setAttribute("id", "cvat_canvas_video");
@@ -395,6 +407,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     this.canvas.appendChild(this.background); // 背景图像层
     this.canvas.appendChild(this.videoElement); // 视频层
     this.canvas.appendChild(this.masksContent); // 遮罩层
+    this.canvas.appendChild(this.bitmap); // 位图栅格化层
     this.canvas.appendChild(this.content); // 内容层（矢量图形）
     this.canvas.appendChild(this.attachmentBoard); // 附加板层
 
@@ -1201,6 +1214,18 @@ export class CanvasViewImpl implements CanvasView, Listener {
       // 处理错误
       this.onError(model.exception, "data fetching");
     }
+    // 处理位图模式切换事件
+    else if (reason === UpdateReasons.BITMAP) {
+      const { imageBitmap } = model;
+      if (imageBitmap) {
+        // 显示位图层并重绘
+        this.bitmap.style.display = "";
+        this.redrawBitmap();
+      } else {
+        // 隐藏位图层
+        this.bitmap.style.display = "none";
+      }
+    }
     // 处理销毁事件
     else if (reason === UpdateReasons.DESTROY) {
       // 分发销毁事件
@@ -1217,6 +1242,11 @@ export class CanvasViewImpl implements CanvasView, Listener {
       window.document.removeEventListener("mouseup", this.onMouseUp);
       // 销毁交互处理器
       this.interactionHandler.destroy();
+    }
+
+    // 位图模式下对象更新后需重新栅格化
+    if (model.imageBitmap && [UpdateReasons.OBJECTS_UPDATED].includes(reason)) {
+      this.redrawBitmap();
     }
   }
 
@@ -4639,6 +4669,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     // 变换画布基础元素
     for (const obj of [
       this.background,
+      this.bitmap,
       this.videoElement,
       this.content,
       this.attachmentBoard,
@@ -4797,7 +4828,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
    */
   private moveCanvas(): void {
     // 更新背景的位置
-    for (const obj of [this.background, this.videoElement]) {
+    for (const obj of [this.background, this.bitmap, this.videoElement]) {
       obj.style.top = `${this.geometry.top}px`;
       obj.style.left = `${this.geometry.left}px`;
     }
@@ -4821,12 +4852,53 @@ export class CanvasViewImpl implements CanvasView, Listener {
   }
 
   /**
+   * 重新栅格化位图
+   * 将所有标注对象一次性绘制到位图画布上，用于批量预览。
+   * 几何绘制复用已测试的 renderBitmap，掩码的 RLE 解码/落图走浏览器专用回调。
+   */
+  private redrawBitmap(): void {
+    this.bitmapUpdateReqId++;
+    const { bitmapUpdateReqId } = this;
+    const width = +this.background.style.width.slice(0, -2);
+    const height = +this.background.style.height.slice(0, -2);
+    this.bitmap.setAttribute("width", `${width}px`);
+    this.bitmap.setAttribute("height", `${height}px`);
+
+    const ctx = this.bitmap.getContext("2d");
+    if (!ctx) return;
+
+    renderBitmap(ctx, this.controller.objects, width, height, (dctx, state) => {
+      const { points } = state;
+      const [left, top, right, bottom] = points.slice(-4);
+      const imageBitmap = expandChannels(255, 255, 255, points);
+      imageDataToDataURL(imageBitmap, right - left + 1, bottom - top + 1, (dataURL: string) => new Promise<void>((resolve) => {
+        if (bitmapUpdateReqId === this.bitmapUpdateReqId) {
+          const img = document.createElement("img");
+          img.addEventListener(
+            "load",
+            () => {
+              dctx.drawImage(img, left, top);
+              resolve();
+            },
+            { once: true }
+          );
+          img.addEventListener("error", () => resolve(), { once: true });
+          img.src = dataURL;
+        } else {
+          // 异步绘图前帧已改变，丢弃过期数据；URL 由 imageDataToDataURL 的 .finally 释放
+          resolve();
+        }
+      }));
+    });
+  }
+
+  /**
    * 调整画布大小方法
    * 根据图像尺寸和偏移量调整所有画布元素的大小
    */
   private resizeCanvas(): void {
     // 调整背景、掩码内容的大小为图像尺寸
-    for (const obj of [this.background, this.videoElement, this.masksContent]) {
+    for (const obj of [this.background, this.bitmap, this.videoElement, this.masksContent]) {
       obj.style.width = `${this.geometry.image.width}px`;
       obj.style.height = `${this.geometry.image.height}px`;
     }

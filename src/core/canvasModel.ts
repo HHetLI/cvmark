@@ -566,6 +566,8 @@ export interface CanvasModel {
 
   /** 媒体数据，null表示无数据 */
   readonly media: Media | null;
+  /** 是否开启位图栅格化模式 */
+  readonly imageBitmap: boolean;
   /** 配置数据 */
   readonly configuration: Configuration;
   /** 聚焦数据 */
@@ -721,6 +723,12 @@ export interface CanvasModel {
   fitCanvas(width: number, height: number): void;
 
   /**
+   * 开启或关闭位图栅格化模式
+   * @param enabled 是否开启
+   */
+  bitmap(enabled: boolean): void;
+
+  /**
    * 启用区域选择模式
    * @param enabled 是否启用
    */
@@ -793,6 +801,8 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
     zLayer: number | null;
     /** 当前媒体对象 */
     media: Media | null;
+    /** 是否开启位图栅格化模式 */
+    imageBitmap: boolean;
     /** 当前图像ID */
     imageID: number | null;
     /** 图像偏移量 */
@@ -931,6 +941,14 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
    */
   public get media(): Media | null {
     return this.data.media;
+  }
+
+  /**
+   * 获取位图栅格化模式开关状态
+   * @returns 是否开启
+   */
+  public get imageBitmap(): boolean {
+    return this.data.imageBitmap;
   }
 
   /**
@@ -1087,6 +1105,8 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
       },
       // 初始媒体为空
       media: null,
+      // 初始位图模式关闭
+      imageBitmap: false,
       // 初始图像ID为空
       imageID: null,
       // 初始图像偏移为0
@@ -2011,6 +2031,15 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
    * @param width 画布宽度
    * @param height 画布高度
    */
+  /**
+   * 开启或关闭位图栅格化模式
+   * @param enabled 是否开启
+   */
+  public bitmap(enabled: boolean): void {
+    this.data.imageBitmap = enabled;
+    this.notify(UpdateReasons.BITMAP);
+  }
+
   public fitCanvas(width: number, height: number): void {
     // 更新画布尺寸
     this.data.canvasSize.height = height;
