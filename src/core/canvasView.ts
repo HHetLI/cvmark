@@ -4861,6 +4861,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
     const { bitmapUpdateReqId } = this;
     const width = +this.background.style.width.slice(0, -2);
     const height = +this.background.style.height.slice(0, -2);
+    // 图片尚未加载时背景尺寸为空，直接跳过，避免 0×0 位图
+    if (!width || !height) return;
     this.bitmap.setAttribute("width", `${width}px`);
     this.bitmap.setAttribute("height", `${height}px`);
 
@@ -4869,6 +4871,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
     renderBitmap(ctx, this.controller.objects, width, height, (dctx, state) => {
       const { points } = state;
+      // 掩码点集末尾需带 4 个边界坐标，否则无法确定绘制区域
+      if (!points || points.length < 4) return;
       const [left, top, right, bottom] = points.slice(-4);
       const imageBitmap = expandChannels(255, 255, 255, points);
       imageDataToDataURL(imageBitmap, right - left + 1, bottom - top + 1, (dataURL: string) => new Promise<void>((resolve) => {

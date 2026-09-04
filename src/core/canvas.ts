@@ -143,6 +143,12 @@ interface Canvas {
   fitCanvas(): void;
 
   /**
+   * 开启或关闭位图栅格化模式
+   * @param enable - 是否开启位图栅格化
+   */
+  bitmap(enable: boolean): void;
+
+  /**
    * 启用或禁用区域选择功能
    * @param enable - 是否启用区域选择
    */

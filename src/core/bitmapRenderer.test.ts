@@ -114,7 +114,7 @@ describe("renderBitmap", () => {
     const { ctx, calls } = mockContext();
     renderBitmap(
       ctx,
-      [{ shapeType: "ellipse", points: [10, 20, 15, 25], rotation: 45 }],
+      [{ shapeType: "ellipse", points: [10, 20, 15, 12], rotation: 45 }],
       100,
       50,
       drawMask
@@ -125,8 +125,26 @@ describe("renderBitmap", () => {
     expect(cx).toBe(10);
     expect(cy).toBe(20);
     expect(rx).toBe(15 - 10);
-    expect(ry).toBe(20 - 25);
+    expect(ry).toBe(20 - 12);
     expect(angle).toBe((45 * Math.PI) / 180);
+  });
+
+  it("skips a malformed ellipse (negative radius) without drawing", () => {
+    const { ctx, calls } = mockContext();
+    renderBitmap(ctx, [{ shapeType: "ellipse", points: [10, 20, 15, 25] }], 100, 50, drawMask);
+    expect(calls.filter((c) => c.kind === "ellipse")).toHaveLength(0);
+  });
+
+  it("skips a cuboid with too few points without drawing", () => {
+    const { ctx, calls } = mockContext();
+    renderBitmap(
+      ctx,
+      [{ shapeType: "cuboid", points: [0, 0, 20, 0, 20, 20, 0, 20] }],
+      100,
+      50,
+      drawMask
+    );
+    expect(calls.filter((c) => c.kind === "fill")).toHaveLength(0);
   });
 
   it("draws a cuboid as one front face plus five projected faces", () => {

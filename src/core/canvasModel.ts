@@ -2027,11 +2027,6 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
   }
 
   /**
-   * 调整画布尺寸以适应容器
-   * @param width 画布宽度
-   * @param height 画布高度
-   */
-  /**
    * 开启或关闭位图栅格化模式
    * @param enabled 是否开启
    */
@@ -2040,6 +2035,11 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
     this.notify(UpdateReasons.BITMAP);
   }
 
+  /**
+   * 调整画布尺寸以适应容器
+   * @param width 画布宽度
+   * @param height 画布高度
+   */
   public fitCanvas(width: number, height: number): void {
     // 更新画布尺寸
     this.data.canvasSize.height = height;
