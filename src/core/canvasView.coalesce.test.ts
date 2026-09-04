@@ -41,4 +41,25 @@ describe("CanvasViewImpl transform coalescing", () => {
     // 下一帧一次性应用最终几何
     expect(content.style.transform).toBe("scale(2) rotate(0deg)");
   });
+
+  it("still applies the zoom transform when a move arrives last in the same frame", () => {
+    const { model, controller, view } = buildView();
+    const content = view.html().querySelector("#cvat_canvas_content") as SVGElement;
+
+    controller.geometry = {
+      ...controller.geometry,
+      scale: 3,
+      angle: 0,
+      top: 40,
+      left: 90,
+    };
+
+    // IMAGE_ZOOMED 先到，IMAGE_MOVED 后到——move 不能把 zoom 的 transform 吞掉
+    view.notify(model, UpdateReasons.IMAGE_ZOOMED);
+    view.notify(model, UpdateReasons.IMAGE_MOVED);
+
+    vi.advanceTimersByTime(16);
+
+    expect(content.style.transform).toBe("scale(3) rotate(0deg)");
+  });
 });

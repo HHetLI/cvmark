@@ -131,7 +131,13 @@ describe("renderBitmap", () => {
 
   it("skips a malformed ellipse (negative radius) without drawing", () => {
     const { ctx, calls } = mockContext();
-    renderBitmap(ctx, [{ shapeType: "ellipse", points: [10, 20, 15, 25] }], 100, 50, drawMask);
+    renderBitmap(
+      ctx,
+      [{ shapeType: "ellipse", points: [10, 20, 15, 25] }],
+      100,
+      50,
+      drawMask
+    );
     expect(calls.filter((c) => c.kind === "ellipse")).toHaveLength(0);
   });
 

@@ -137,7 +137,9 @@ export class CanvasViewImpl implements CanvasView, Listener {
   private bitmap: HTMLCanvasElement;
   /** 位图重绘请求ID，用于异步竞态保护 */
   private bitmapUpdateReqId: number;
-  /** 画布变换合并器：把高频 move/zoom 合并到单帧 */
+  /** 移动合并器：把高频移动合并到单帧 */
+  private moveCoalescer: RafCoalescer;
+  /** 变换合并器：把高频缩放合并到单帧 */
   private transformCoalescer: RafCoalescer;
   /** 上次对象 Z 序签名，用于跳过不必要的 sortObjects */
   private lastObjectOrderSignature = "";
@@ -390,6 +392,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     this.bitmap.setAttribute("id", "cvat_canvas_bitmap");
     this.bitmap.style.display = "none";
     this.bitmapUpdateReqId = 0;
+    this.moveCoalescer = new RafCoalescer();
     this.transformCoalescer = new RafCoalescer();
 
     // 创建视频元素
@@ -3265,8 +3268,13 @@ export class CanvasViewImpl implements CanvasView, Listener {
       this.deleteObjects(updatedSkeletons);
       this.addObjects(updatedSkeletons);
 
-      // 仅在 Z 序排列实际变化时才重排，避免每次对象更新都做 O(N) DOM 扫描
-      this.sortIfOrderChanged(states);
+      // 仅在 Z 序排列实际变化时才重排，避免每次对象更新都做 O(N) DOM 扫描；
+      // 但当对象被增删或骨架被重建（会变动 DOM 相对顺序）时必须强制重排
+      const orderDisturbed =
+        created.length > 0 ||
+        deleted.length > 0 ||
+        updatedSkeletons.length > 0;
+      this.sortIfOrderChanged(states, orderDisturbed);
 
       // 如果控制器有活动元素，重新激活
       if (this.controller.activeElement.clientID !== null) {
@@ -4259,13 +4267,13 @@ export class CanvasViewImpl implements CanvasView, Listener {
    * 仅当 Z 序排列发生变化时才重排对象，否则直接跳过 O(N) 的 DOM 扫描。
    * @param states 当前帧所有对象状态（含 zOrder）
    */
-  private sortIfOrderChanged(states: any[]): void {
+  private sortIfOrderChanged(states: any[], force = false): void {
     const signature = zOrderSignature(
       states.map(
         (state: any): ZOrderItem => ({ clientID: state.clientID, zOrder: state.zOrder || 0 })
       )
     );
-    if (signature !== this.lastObjectOrderSignature) {
+    if (force || signature !== this.lastObjectOrderSignature) {
       this.sortObjects();
       this.lastObjectOrderSignature = signature;
     }
@@ -4849,7 +4857,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
    * 合并一次移动：把 IMAGE_MOVED 的高频更新合并到下一帧
    */
   private scheduleCanvasMove(): void {
-    this.transformCoalescer.request(() => {
+    this.moveCoalescer.request(() => {
       this.moveCanvas();
     });
   }
@@ -4858,8 +4866,11 @@ export class CanvasViewImpl implements CanvasView, Listener {
    * 合并一次缩放：把 IMAGE_ZOOMED 的高频更新合并到下一帧
    */
   private scheduleCanvasZoom(): void {
-    this.transformCoalescer.request(() => {
+    // 移动与变换用两个独立 coalescer，避免某一操作被另一操作覆盖导致状态丢失
+    this.moveCoalescer.request(() => {
       this.moveCanvas();
+    });
+    this.transformCoalescer.request(() => {
       this.transformCanvas();
     });
   }
@@ -4918,22 +4929,20 @@ export class CanvasViewImpl implements CanvasView, Listener {
       const [left, top, right, bottom] = points.slice(-4);
       const imageBitmap = expandChannels(255, 255, 255, points);
       imageDataToDataURL(imageBitmap, right - left + 1, bottom - top + 1, (dataURL: string) => new Promise<void>((resolve) => {
-        if (bitmapUpdateReqId === this.bitmapUpdateReqId) {
-          const img = document.createElement("img");
-          img.addEventListener(
-            "load",
-            () => {
+        const img = document.createElement("img");
+        img.addEventListener(
+          "load",
+          () => {
+            // 只有在仍是最新重绘请求时才落图，防止过期掩码覆盖新帧
+            if (bitmapUpdateReqId === this.bitmapUpdateReqId) {
               dctx.drawImage(img, left, top);
-              resolve();
-            },
-            { once: true }
-          );
-          img.addEventListener("error", () => resolve(), { once: true });
-          img.src = dataURL;
-        } else {
-          // 异步绘图前帧已改变，丢弃过期数据；URL 由 imageDataToDataURL 的 .finally 释放
-          resolve();
-        }
+            }
+            resolve();
+          },
+          { once: true }
+        );
+        img.addEventListener("error", () => resolve(), { once: true });
+        img.src = dataURL;
       }));
     });
   }

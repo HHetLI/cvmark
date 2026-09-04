@@ -23,7 +23,7 @@
     // 使用原生 ES 模块语法（import/export），适用于 Vite、Webpack 5+ 等现代打包工具
     "module": "esnext",
     // 专为现代打包工具设计的模块解析策略，支持 package.json 的 exports 字段和 TypeScript 子路径映射
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     // 允许直接导入 JSON 文件（import data from './data.json'）
     "resolveJsonModule": true,
     // 允许 ES 模块与 CommonJS 的互操作性处理，无需手动处理 import * as React from 'react' 这类导入
@@ -31,8 +31,10 @@
     // 只进行类型检查，不生成编译产物，通常与 Babel/SWC 配合，由打包工具处理代码转换
     "noEmit": true,
 
-    // 设置模块解析的基准目录为项目根目录
-    "baseUrl": "."
+    // 路径别名（TypeScript 7 移除了 baseUrl，paths 相对 tsconfig 所在目录解析）
+    "paths": {
+      "*": ["./*"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

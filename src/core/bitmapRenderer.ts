@@ -109,7 +109,9 @@ export function renderBitmap(
     }
 
     if (state.shapeType === "cuboid") {
-      // 投影面需要完整 16 个坐标
+      // 投影面需要完整 16 个坐标。注意：该 5 面构造从 cvat 逐字移植，
+      // i=0 与 i=4 会画出同一面、前脸由 4 个投影点构成。对二值轮廓预览
+      // 而言重复/近似填充无害，故保持与上游一致，不单独“优化”几何。
       if (pts.length < 16) continue;
       for (let i = 0; i < 5; i++) {
         const points = [

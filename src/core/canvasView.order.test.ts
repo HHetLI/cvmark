@@ -51,4 +51,34 @@ describe("CanvasViewImpl.sortIfOrderChanged", () => {
     ).sortIfOrderChanged(changed);
     expect(sortSpy).toHaveBeenCalledTimes(2);
   });
+
+  it("forces a re-sort when the DOM order may have been disturbed (e.g. skeleton re-add)", () => {
+    const { view } = buildView();
+    const sortSpy = vi.spyOn(
+      view as unknown as { sortObjects: () => void },
+      "sortObjects"
+    );
+
+    // 首次触发一次，建立缓存
+    (
+      view as unknown as {
+        sortIfOrderChanged: (
+          s: { clientID: number; zOrder: number }[],
+          force?: boolean
+        ) => void;
+      }
+    ).sortIfOrderChanged(states);
+    expect(sortSpy).toHaveBeenCalledTimes(1);
+
+    // 同一签名，但 force=true（DOM 被 add/delete/skeleton 重排扰动）-> 仍应重排
+    (
+      view as unknown as {
+        sortIfOrderChanged: (
+          s: { clientID: number; zOrder: number }[],
+          force?: boolean
+        ) => void;
+      }
+    ).sortIfOrderChanged(states, true);
+    expect(sortSpy).toHaveBeenCalledTimes(2);
+  });
 });
