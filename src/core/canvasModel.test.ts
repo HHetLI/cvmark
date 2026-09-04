@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { CanvasModelImpl, UpdateReasons } from './canvasModel';
-import type { Listener, Master } from '../events/master';
+import { describe, expect, it } from "vitest";
+import type { Listener, Master } from "../events/master";
+import { CanvasModelImpl, UpdateReasons } from "./canvasModel";
 
 function subscribeToReasons(model: Master): string[] {
   const reasons: string[] = [];
   const listener: Listener = {
-    notify(master: Master, reason: string): void {
+    notify(_master: Master, reason: string): void {
       reasons.push(reason);
     },
   };
@@ -13,8 +13,8 @@ function subscribeToReasons(model: Master): string[] {
   return reasons;
 }
 
-describe('CanvasModelImpl.bitmap', () => {
-  it('enables bitmap and notifies BITMAP reason', () => {
+describe("CanvasModelImpl.bitmap", () => {
+  it("enables bitmap and notifies BITMAP reason", () => {
     const model = new CanvasModelImpl();
     const reasons = subscribeToReasons(model);
 
@@ -24,7 +24,7 @@ describe('CanvasModelImpl.bitmap', () => {
     expect(reasons).toContain(UpdateReasons.BITMAP);
   });
 
-  it('disables bitmap and notifies BITMAP reason', () => {
+  it("disables bitmap and notifies BITMAP reason", () => {
     const model = new CanvasModelImpl();
     const reasons = subscribeToReasons(model);
 
@@ -34,7 +34,7 @@ describe('CanvasModelImpl.bitmap', () => {
     expect(reasons).toContain(UpdateReasons.BITMAP);
   });
 
-  it('defaults to bitmap disabled', () => {
+  it("defaults to bitmap disabled", () => {
     const model = new CanvasModelImpl();
     expect(model.imageBitmap).toBe(false);
   });
