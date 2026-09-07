@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { fabric } from "fabric";
+import * as fabric from "fabric";
 import debounce from "lodash/debounce";
 
 import consts from "../consts/consts";
@@ -484,7 +484,7 @@ export class MasksHandlerImpl implements MasksHandler {
           // 处理线条对象
           if (object instanceof fabric.Line) {
             // 提取当前透明度
-            const alpha = +object.stroke!.split(",")[3].slice(0, -1);
+            const alpha = +(object.stroke as string).split(",")[3].slice(0, -1);
             // 设置新颜色的透明度
             color.setAlpha(alpha);
             // 更新线条颜色
@@ -722,18 +722,20 @@ export class MasksHandlerImpl implements MasksHandler {
     });
 
     // 注册鼠标按下事件处理器
-    this.canvas.on("mouse:down", (options: fabric.IEvent<MouseEvent>) => {
+    this.canvas.on("mouse:down", (options: fabric.TPointerEventInfo) => {
       const { isDrawing, isEditing, isInsertion } = this;
+      // fabric v7 将事件定为 MouseEvent|TouchEvent|PointerEvent 联合，这里按鼠标使用
+      const mouseEvent = options.e as MouseEvent;
       // 根据鼠标按钮和修饰键设置状态
       this.isMouseDown =
-        (isDrawing || isEditing) && options.e.button === 0 && !options.e.altKey;
+        (isDrawing || isEditing) && mouseEvent.button === 0 && !mouseEvent.altKey;
       this.isBrushSizeChanging =
-        (isDrawing || isEditing) && options.e.button === 2 && options.e.altKey;
+        (isDrawing || isEditing) && mouseEvent.button === 2 && mouseEvent.altKey;
 
       // 处理插入模式
       if (isInsertion) {
         // 检查是否继续插入
-        const continueInserting = options.e.ctrlKey;
+        const continueInserting = mouseEvent.ctrlKey;
         // 获取绘制对象的包围盒
         const wrappingBbox = this.getDrawnObjectsWrappingBox();
         // 从画布提取图像数据
@@ -775,185 +777,191 @@ export class MasksHandlerImpl implements MasksHandler {
     });
 
     // 注册鼠标移动事件处理器
-    this.canvas.on("mouse:move", (e: fabric.IEvent<MouseEvent>) => {
-      // 获取图像尺寸和旋转角度
-      const {
-        image: { width: imageWidth, height: imageHeight },
-      } = this.geometry!;
-      const { angle } = this.geometry!;
-      // 获取原始坐标
-      let [x, y] = [e.pointer!.x, e.pointer!.y];
+    // fabric v7 类型未在 TPointerEventInfo 上声明 pointer（运行时提供），用交叉类型补齐
+    this.canvas.on(
+      "mouse:move",
+      (e: fabric.TPointerEventInfo & { pointer: { x: number; y: number } }) => {
+        // 获取图像尺寸和旋转角度
+        const {
+          image: { width: imageWidth, height: imageHeight },
+        } = this.geometry!;
+        const { angle } = this.geometry!;
+        // 获取原始坐标
+        let [x, y] = [e.pointer!.x, e.pointer!.y];
 
-      // 根据图像旋转角度调整坐标
-      if (angle === 180) {
-        [x, y] = [imageWidth - x, imageHeight - y];
-      } else if (angle === 270) {
-        [x, y] = [
-          imageWidth - (y / imageHeight) * imageWidth,
-          (x / imageWidth) * imageHeight,
-        ];
-      } else if (angle === 90) {
-        [x, y] = [
-          (y / imageHeight) * imageWidth,
-          imageHeight - (x / imageWidth) * imageHeight,
-        ];
-      }
-
-      // 创建位置对象
-      const position = { x, y };
-      // 获取当前状态
-      const { tool, isMouseDown, isInsertion, isBrushSizeChanging } = this;
-
-      // 处理插入模式下的对象移动
-      if (isInsertion) {
-        const [object] = this.drawnObjects;
-        if (object && object instanceof fabric.Image) {
-          // 更新图像位置，使其中心跟随鼠标
-          object.left = position.x - object.width! / 2;
-          object.top = position.y - object.height! / 2;
-          this.canvas.renderAll();
-        }
-      }
-
-      // 处理画笔大小调整
-      if (
-        isBrushSizeChanging &&
-        tool?.type !== undefined &&
-        ["brush", "eraser"].includes(tool.type)
-      ) {
-        // 计算鼠标移动距离
-        const xDiff = e.pointer!.x - this.resizeBrushToolLatestX;
-        let onUpdateConfiguration = null;
-        // 获取相应的配置更新回调
-        if (this.isDrawing) {
-          onUpdateConfiguration = this.drawData!.onUpdateConfiguration;
-        } else if (this.isEditing) {
-          onUpdateConfiguration = this.editData!.onUpdateConfiguration;
+        // 根据图像旋转角度调整坐标
+        if (angle === 180) {
+          [x, y] = [imageWidth - x, imageHeight - y];
+        } else if (angle === 270) {
+          [x, y] = [
+            imageWidth - (y / imageHeight) * imageWidth,
+            (x / imageWidth) * imageHeight,
+          ];
+        } else if (angle === 90) {
+          [x, y] = [
+            (y / imageHeight) * imageWidth,
+            imageHeight - (x / imageWidth) * imageHeight,
+          ];
         }
 
-        // 更新画笔大小配置
-        if (onUpdateConfiguration) {
-          onUpdateConfiguration({
-            brushTool: {
-              size: Math.trunc(Math.max(1, this.tool!.size + xDiff)),
-            },
-          });
-        }
+        // 创建位置对象
+        const position = { x, y };
+        // 获取当前状态
+        const { tool, isMouseDown, isInsertion, isBrushSizeChanging } = this;
 
-        // 更新最新的X坐标
-        this.resizeBrushToolLatestX = e.pointer!.x;
-        // 阻止事件冒泡
-        e.e.stopPropagation();
-        return;
-      }
-
-      // 更新画笔标记位置
-      if (this.brushMarker) {
-        this.brushMarker.left = position.x - tool!.size / 2;
-        this.brushMarker.top = position.y - tool!.size / 2;
-        this.canvas.bringToFront(this.brushMarker);
-        this.canvas.renderAll();
-      }
-
-      // 处理画笔/橡皮擦绘制
-      if (
-        isMouseDown &&
-        !this.isHidden &&
-        !isBrushSizeChanging &&
-        tool?.type !== undefined &&
-        ["brush", "eraser"].includes(tool.type)
-      ) {
-        // 创建颜色对象并设置透明度
-        const color = fabric.Color.fromHex(tool!.color);
-        color.setAlpha(tool!.type === "eraser" ? 1 : 0.5);
-
-        // 定义通用属性
-        const commonProperties = {
-          selectable: false,
-          evented: false,
-          globalCompositeOperation: tool!.type === "eraser" ? "destination-out" : "xor",
-        };
-
-        // 定义形状属性
-        const shapeProperties = {
-          ...commonProperties,
-          fill: color.toRgba(),
-          left: position.x - tool!.size / 2,
-          top: position.y - tool!.size / 2,
-        };
-
-        // 根据工具形状创建相应的fabric对象
-        let shape: fabric.Circle | fabric.Rect | null = null;
-        if (tool!.form === "circle") {
-          shape = new fabric.Circle({
-            ...shapeProperties,
-            radius: Math.round(tool!.size / 2),
-          });
-        } else if (tool!.form === "square") {
-          shape = new fabric.Rect({
-            ...shapeProperties,
-            width: tool!.size,
-            height: tool!.size,
-          });
-        }
-
-        // 添加形状到画布
-        this.canvas.add(shape!);
-        // 将形状添加到已绘制对象数组
-        if (["brush", "eraser"].includes(tool?.type)) {
-          this.drawnObjects.push(shape!);
-        }
-
-        // 添加连线以平滑掩码
-        if (this.latestMousePos.x !== -1 && this.latestMousePos.y !== -1) {
-          // 计算鼠标移动距离
-          const dx = position.x - this.latestMousePos.x;
-          const dy = position.y - this.latestMousePos.y;
-          // 如果移动距离足够大，添加连线
-          if (Math.sqrt(dx ** 2 + dy ** 2) > tool!.size / 2) {
-            // 创建连线对象
-            const line = new fabric.Line(
-              [
-                this.latestMousePos.x - tool!.size / 2,
-                this.latestMousePos.y - tool!.size / 2,
-                position.x - tool!.size / 2,
-                position.y - tool!.size / 2,
-              ],
-              {
-                ...commonProperties,
-                stroke: color.toRgba(),
-                strokeWidth: tool!.size,
-                strokeLineCap: tool!.form === "circle" ? "round" : "square",
-              }
-            );
-
-            // 添加连线到画布
-            this.canvas.add(line);
-            // 将连线添加到已绘制对象数组
-            if (["brush", "eraser"].includes(tool?.type)) {
-              this.drawnObjects.push(line);
-            }
+        // 处理插入模式下的对象移动
+        if (isInsertion) {
+          const [object] = this.drawnObjects;
+          if (object && object instanceof fabric.Image) {
+            // 更新图像位置，使其中心跟随鼠标
+            object.left = position.x - object.width! / 2;
+            object.top = position.y - object.height! / 2;
+            this.canvas.renderAll();
           }
         }
-        // 重新渲染画布
-        this.canvas.renderAll();
-      } else if (tool?.type.startsWith("polygon-") && this.drawablePolygon) {
-        // 更新多边形位置
-        const points = this.drawablePolygon.get("points");
-        if (points && points.length) {
-          // 更新最后一个点的位置
-          points[points.length - 1].setX(e.e.offsetX);
-          points[points.length - 1].setY(e.e.offsetY);
-        }
-        // 重新渲染画布
-        this.canvas.renderAll();
-      }
 
-      // 更新鼠标位置记录
-      this.latestMousePos.x = position.x;
-      this.latestMousePos.y = position.y;
-      this.resizeBrushToolLatestX = position.x;
-    });
+        // 处理画笔大小调整
+        if (
+          isBrushSizeChanging &&
+          tool?.type !== undefined &&
+          ["brush", "eraser"].includes(tool.type)
+        ) {
+          // 计算鼠标移动距离
+          const xDiff = e.pointer!.x - this.resizeBrushToolLatestX;
+          let onUpdateConfiguration = null;
+          // 获取相应的配置更新回调
+          if (this.isDrawing) {
+            onUpdateConfiguration = this.drawData!.onUpdateConfiguration;
+          } else if (this.isEditing) {
+            onUpdateConfiguration = this.editData!.onUpdateConfiguration;
+          }
+
+          // 更新画笔大小配置
+          if (onUpdateConfiguration) {
+            onUpdateConfiguration({
+              brushTool: {
+                size: Math.trunc(Math.max(1, this.tool!.size + xDiff)),
+              },
+            });
+          }
+
+          // 更新最新的X坐标
+          this.resizeBrushToolLatestX = e.pointer!.x;
+          // 阻止事件冒泡
+          (e.e as MouseEvent).stopPropagation();
+          return;
+        }
+
+        // 更新画笔标记位置
+        if (this.brushMarker) {
+          this.brushMarker.left = position.x - tool!.size / 2;
+          this.brushMarker.top = position.y - tool!.size / 2;
+          this.canvas.bringObjectToFront(this.brushMarker);
+          this.canvas.renderAll();
+        }
+
+        // 处理画笔/橡皮擦绘制
+        if (
+          isMouseDown &&
+          !this.isHidden &&
+          !isBrushSizeChanging &&
+          tool?.type !== undefined &&
+          ["brush", "eraser"].includes(tool.type)
+        ) {
+          // 创建颜色对象并设置透明度
+          const color = fabric.Color.fromHex(tool!.color);
+          color.setAlpha(tool!.type === "eraser" ? 1 : 0.5);
+
+          // 定义通用属性
+          const commonProperties = {
+            selectable: false,
+            evented: false,
+            globalCompositeOperation: (tool!.type === "eraser"
+              ? "destination-out"
+              : "xor") as GlobalCompositeOperation,
+          };
+
+          // 定义形状属性
+          const shapeProperties = {
+            ...commonProperties,
+            fill: color.toRgba(),
+            left: position.x - tool!.size / 2,
+            top: position.y - tool!.size / 2,
+          };
+
+          // 根据工具形状创建相应的fabric对象
+          let shape: fabric.Circle | fabric.Rect | null = null;
+          if (tool!.form === "circle") {
+            shape = new fabric.Circle({
+              ...shapeProperties,
+              radius: Math.round(tool!.size / 2),
+            });
+          } else if (tool!.form === "square") {
+            shape = new fabric.Rect({
+              ...shapeProperties,
+              width: tool!.size,
+              height: tool!.size,
+            });
+          }
+
+          // 添加形状到画布
+          this.canvas.add(shape!);
+          // 将形状添加到已绘制对象数组
+          if (["brush", "eraser"].includes(tool?.type)) {
+            this.drawnObjects.push(shape!);
+          }
+
+          // 添加连线以平滑掩码
+          if (this.latestMousePos.x !== -1 && this.latestMousePos.y !== -1) {
+            // 计算鼠标移动距离
+            const dx = position.x - this.latestMousePos.x;
+            const dy = position.y - this.latestMousePos.y;
+            // 如果移动距离足够大，添加连线
+            if (Math.sqrt(dx ** 2 + dy ** 2) > tool!.size / 2) {
+              // 创建连线对象
+              const line = new fabric.Line(
+                [
+                  this.latestMousePos.x - tool!.size / 2,
+                  this.latestMousePos.y - tool!.size / 2,
+                  position.x - tool!.size / 2,
+                  position.y - tool!.size / 2,
+                ],
+                {
+                  ...commonProperties,
+                  stroke: color.toRgba(),
+                  strokeWidth: tool!.size,
+                  strokeLineCap: tool!.form === "circle" ? "round" : "square",
+                }
+              );
+
+              // 添加连线到画布
+              this.canvas.add(line);
+              // 将连线添加到已绘制对象数组
+              if (["brush", "eraser"].includes(tool?.type)) {
+                this.drawnObjects.push(line);
+              }
+            }
+          }
+          // 重新渲染画布
+          this.canvas.renderAll();
+        } else if (tool?.type.startsWith("polygon-") && this.drawablePolygon) {
+          // 更新多边形位置
+          const points = this.drawablePolygon.get("points");
+          if (points && points.length) {
+            // 更新最后一个点的位置
+            points[points.length - 1].setX((e.e as MouseEvent).offsetX);
+            points[points.length - 1].setY((e.e as MouseEvent).offsetY);
+          }
+          // 重新渲染画布
+          this.canvas.renderAll();
+        }
+
+        // 更新鼠标位置记录
+        this.latestMousePos.x = position.x;
+        this.latestMousePos.y = position.y;
+        this.resizeBrushToolLatestX = position.x;
+      }
+    );
   }
 
   /**
@@ -990,8 +998,6 @@ export class MasksHandlerImpl implements MasksHandler {
     const topCanvas = this.canvas.getElement().parentElement as HTMLDivElement;
     // 如果画布尺寸发生变化，更新画布尺寸
     if (this.canvas.width !== width || this.canvas.height !== height) {
-      this.canvas.setHeight(height);
-      this.canvas.setWidth(width);
       this.canvas.setDimensions({ width, height });
     }
 
@@ -1032,35 +1038,27 @@ export class MasksHandlerImpl implements MasksHandler {
           right - left + 1,
           bottom - top + 1,
           (dataURL: string) =>
-            new Promise((resolve) => {
-              // 从数据URL创建fabric图像对象
-              fabric.Image.fromURL(
-                dataURL,
-                (image: fabric.Image) => {
-                  try {
-                    // 设置图像属性
-                    image.selectable = false;
-                    image.evented = false;
-                    image.globalCompositeOperation = "xor";
-                    image.opacity = 0.5;
-                    // 添加图像到画布
-                    this.canvas.add(image);
-                    /*
+            // 从数据URL创建fabric图像对象
+            fabric.Image.fromURL(dataURL, {}, { left, top })
+              .then((image: fabric.Image) => {
+                // 设置图像属性
+                image.selectable = false;
+                image.evented = false;
+                image.globalCompositeOperation = "xor";
+                image.opacity = 0.5;
+                // 添加图像到画布
+                this.canvas.add(image);
+                /*
                                     当粘贴掩码时，我们不需要MasksHandlerImpl::createDrawnObjectsArray.push中
                                     使用JS Proxy实现的额外逻辑，因为我们在这里不会使用任何绘制工具，
                                     这会导致问题，因为this.tools在这里可能未定义
                                     当在push自定义实现中使用时
                                 */
-                    this.drawnObjects = [image];
-                    // 重新渲染画布
-                    this.canvas.renderAll();
-                  } finally {
-                    resolve();
-                  }
-                },
-                { left, top }
-              );
-            })
+                this.drawnObjects = [image];
+                // 重新渲染画布
+                this.canvas.renderAll();
+              })
+              .catch(() => undefined)
         );
 
         // 设置为插入模式
@@ -1179,31 +1177,22 @@ export class MasksHandlerImpl implements MasksHandler {
           right - left + 1, // 计算宽度
           bottom - top + 1, // 计算高度
           (dataURL: string) =>
-            new Promise((resolve) => {
-              // 从数据URL创建fabric图像对象
-              fabric.Image.fromURL(
-                dataURL,
-                (image: fabric.Image) => {
-                  try {
-                    // 设置图像属性
-                    image.selectable = false; // 禁用选择
-                    image.evented = false; // 禁用事件
-                    image.globalCompositeOperation = "xor"; // 设置全局合成操作
-                    image.opacity = 0.5; // 设置透明度
-                    // 将图像添加到画布
-                    this.canvas.add(image);
-                    // 将图像添加到已绘制对象数组
-                    this.drawnObjects.push(image);
-                    // 渲染画布
-                    this.canvas.renderAll();
-                  } finally {
-                    // 解析Promise
-                    resolve();
-                  }
-                },
-                { left, top }
-              ); // 设置图像位置
-            })
+            // 从数据URL创建fabric图像对象
+            fabric.Image.fromURL(dataURL, {}, { left, top })
+              .then((image: fabric.Image) => {
+                // 设置图像属性
+                image.selectable = false; // 禁用选择
+                image.evented = false; // 禁用事件
+                image.globalCompositeOperation = "xor"; // 设置全局合成操作
+                image.opacity = 0.5; // 设置透明度
+                // 将图像添加到画布
+                this.canvas.add(image);
+                // 将图像添加到已绘制对象数组
+                this.drawnObjects.push(image);
+                // 渲染画布
+                this.canvas.renderAll();
+              })
+              .catch(() => undefined)
         );
 
         // 标记为编辑状态

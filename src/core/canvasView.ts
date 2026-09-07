@@ -1,4 +1,4 @@
-import { fabric } from "fabric";
+import * as fabric from "fabric";
 import polylabel from "polylabel";
 import * as SVG from "svg.js";
 
@@ -4279,7 +4279,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
   private sortIfOrderChanged(states: ZOrderItem[], force = false): void {
     const signature = zOrderSignature(
       states.map(
-        (state: ZOrderItem): ZOrderItem => ({ clientID: state.clientID, zOrder: state.zOrder || 0 })
+        (state: ZOrderItem): ZOrderItem => ({
+          clientID: state.clientID,
+          zOrder: state.zOrder || 0,
+        })
       )
     );
     if (force || signature !== this.lastObjectOrderSignature) {
@@ -4937,22 +4940,28 @@ export class CanvasViewImpl implements CanvasView, Listener {
       if (!points || points.length < 4) return;
       const [left, top, right, bottom] = points.slice(-4);
       const imageBitmap = expandChannels(255, 255, 255, points);
-      imageDataToDataURL(imageBitmap, right - left + 1, bottom - top + 1, (dataURL: string) => new Promise<void>((resolve) => {
-        const img = document.createElement("img");
-        img.addEventListener(
-          "load",
-          () => {
-            // 只有在仍是最新重绘请求时才落图，防止过期掩码覆盖新帧
-            if (bitmapUpdateReqId === this.bitmapUpdateReqId) {
-              dctx.drawImage(img, left, top);
-            }
-            resolve();
-          },
-          { once: true }
-        );
-        img.addEventListener("error", () => resolve(), { once: true });
-        img.src = dataURL;
-      }));
+      imageDataToDataURL(
+        imageBitmap,
+        right - left + 1,
+        bottom - top + 1,
+        (dataURL: string) =>
+          new Promise<void>((resolve) => {
+            const img = document.createElement("img");
+            img.addEventListener(
+              "load",
+              () => {
+                // 只有在仍是最新重绘请求时才落图，防止过期掩码覆盖新帧
+                if (bitmapUpdateReqId === this.bitmapUpdateReqId) {
+                  dctx.drawImage(img, left, top);
+                }
+                resolve();
+              },
+              { once: true }
+            );
+            img.addEventListener("error", () => resolve(), { once: true });
+            img.src = dataURL;
+          })
+      );
     });
   }
 
@@ -4962,7 +4971,12 @@ export class CanvasViewImpl implements CanvasView, Listener {
    */
   private resizeCanvas(): void {
     // 调整背景、掩码内容的大小为图像尺寸
-    for (const obj of [this.background, this.bitmap, this.videoElement, this.masksContent]) {
+    for (const obj of [
+      this.background,
+      this.bitmap,
+      this.videoElement,
+      this.masksContent,
+    ]) {
       obj.style.width = `${this.geometry.image.width}px`;
       obj.style.height = `${this.geometry.image.height}px`;
     }
