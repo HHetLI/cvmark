@@ -1250,6 +1250,9 @@ export class CanvasViewImpl implements CanvasView, Listener {
       window.document.removeEventListener("keydown", this.onKeyDown);
       window.document.removeEventListener("keyup", this.onKeyUp);
       window.document.removeEventListener("mouseup", this.onMouseUp);
+      // 取消未执行的移动/变换合并回调，避免在已清理的 DOM 上执行
+      this.moveCoalescer.cancel();
+      this.transformCoalescer.cancel();
       // 销毁交互处理器
       this.interactionHandler.destroy();
     }
@@ -3257,6 +3260,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
       const updatedSkeletons = updated.filter(
         (state: any): boolean => state.shapeType === "skeleton"
       );
+      // mask 更新也会 delete+add 重排 DOM（见 updateObjects），同样会扰动相对顺序
+      const updatedMasks = updated.filter(
+        (state: any): boolean => state.shapeType === "mask"
+      );
       const updatedNotSkeletons = updated.filter(
         (state: any): boolean => state.shapeType !== "skeleton"
       );
@@ -3269,11 +3276,13 @@ export class CanvasViewImpl implements CanvasView, Listener {
       this.addObjects(updatedSkeletons);
 
       // 仅在 Z 序排列实际变化时才重排，避免每次对象更新都做 O(N) DOM 扫描；
-      // 但当对象被增删或骨架被重建（会变动 DOM 相对顺序）时必须强制重排
+      // 但当对象被增删、或骨架/mask 被 delete+add 重建（会变动 DOM 相对顺序）时
+      // 必须强制重排，否则新对象会错误地落在顶层
       const orderDisturbed =
         created.length > 0 ||
         deleted.length > 0 ||
-        updatedSkeletons.length > 0;
+        updatedSkeletons.length > 0 ||
+        updatedMasks.length > 0;
       this.sortIfOrderChanged(states, orderDisturbed);
 
       // 如果控制器有活动元素，重新激活
@@ -4267,10 +4276,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
    * 仅当 Z 序排列发生变化时才重排对象，否则直接跳过 O(N) 的 DOM 扫描。
    * @param states 当前帧所有对象状态（含 zOrder）
    */
-  private sortIfOrderChanged(states: any[], force = false): void {
+  private sortIfOrderChanged(states: ZOrderItem[], force = false): void {
     const signature = zOrderSignature(
       states.map(
-        (state: any): ZOrderItem => ({ clientID: state.clientID, zOrder: state.zOrder || 0 })
+        (state: ZOrderItem): ZOrderItem => ({ clientID: state.clientID, zOrder: state.zOrder || 0 })
       )
     );
     if (force || signature !== this.lastObjectOrderSignature) {
@@ -4912,9 +4921,9 @@ export class CanvasViewImpl implements CanvasView, Listener {
   private redrawBitmap(): void {
     this.bitmapUpdateReqId++;
     const { bitmapUpdateReqId } = this;
-    const width = +this.background.style.width.slice(0, -2);
-    const height = +this.background.style.height.slice(0, -2);
-    // 图片尚未加载时背景尺寸为空，直接跳过，避免 0×0 位图
+    // 从几何信息读取渲染尺寸，避免解析 style 字符串（可能为 "" 或百分比）
+    const width = this.geometry.image.width;
+    const height = this.geometry.image.height;
     if (!width || !height) return;
     this.bitmap.setAttribute("width", `${width}px`);
     this.bitmap.setAttribute("height", `${height}px`);

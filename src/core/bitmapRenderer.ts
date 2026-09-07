@@ -100,7 +100,7 @@ export function renderBitmap(
         0,
         2 * Math.PI
       );
-      ctx.closePath();
+      // 完整椭圆路径已封闭，无需再 closePath（多余的会补一条零长的闭合线）
       ctx.fill();
     }
 
