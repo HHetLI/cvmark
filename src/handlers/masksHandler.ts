@@ -483,8 +483,10 @@ export class MasksHandlerImpl implements MasksHandler {
         for (const object of this.drawnObjects) {
           // 处理线条对象
           if (object instanceof fabric.Line) {
+            // v7 中 stroke 为 string | TFiller，只有纯色字符串才能解析透明度
+            if (typeof object.stroke !== "string") continue;
             // 提取当前透明度
-            const alpha = +(object.stroke as string).split(",")[3].slice(0, -1);
+            const alpha = +object.stroke.split(",")[3].slice(0, -1);
             // 设置新颜色的透明度
             color.setAlpha(alpha);
             // 更新线条颜色
@@ -777,17 +779,17 @@ export class MasksHandlerImpl implements MasksHandler {
     });
 
     // 注册鼠标移动事件处理器
-    // fabric v7 类型未在 TPointerEventInfo 上声明 pointer（运行时提供），用交叉类型补齐
+    // fabric v7 类型未在 TPointerEventInfo 上声明 pointer（运行时提供），用可选交叉类型补齐
     this.canvas.on(
       "mouse:move",
-      (e: fabric.TPointerEventInfo & { pointer: { x: number; y: number } }) => {
+      (e: fabric.TPointerEventInfo & { pointer?: { x: number; y: number } }) => {
         // 获取图像尺寸和旋转角度
         const {
           image: { width: imageWidth, height: imageHeight },
         } = this.geometry!;
         const { angle } = this.geometry!;
         // 获取原始坐标
-        let [x, y] = [e.pointer!.x, e.pointer!.y];
+        let [x, y] = [e.pointer?.x ?? 0, e.pointer?.y ?? 0];
 
         // 根据图像旋转角度调整坐标
         if (angle === 180) {
@@ -827,7 +829,7 @@ export class MasksHandlerImpl implements MasksHandler {
           ["brush", "eraser"].includes(tool.type)
         ) {
           // 计算鼠标移动距离
-          const xDiff = e.pointer!.x - this.resizeBrushToolLatestX;
+          const xDiff = (e.pointer?.x ?? 0) - this.resizeBrushToolLatestX;
           let onUpdateConfiguration = null;
           // 获取相应的配置更新回调
           if (this.isDrawing) {
@@ -846,7 +848,7 @@ export class MasksHandlerImpl implements MasksHandler {
           }
 
           // 更新最新的X坐标
-          this.resizeBrushToolLatestX = e.pointer!.x;
+          this.resizeBrushToolLatestX = e.pointer?.x ?? 0;
           // 阻止事件冒泡
           (e.e as MouseEvent).stopPropagation();
           return;
@@ -1058,7 +1060,7 @@ export class MasksHandlerImpl implements MasksHandler {
                 // 重新渲染画布
                 this.canvas.renderAll();
               })
-              .catch(() => undefined)
+              .catch((error: unknown) => { console.warn("Failed to decode mask image:", error); })
         );
 
         // 设置为插入模式
@@ -1192,7 +1194,7 @@ export class MasksHandlerImpl implements MasksHandler {
                 // 渲染画布
                 this.canvas.renderAll();
               })
-              .catch(() => undefined)
+              .catch((error: unknown) => { console.warn("Failed to decode mask image:", error); })
         );
 
         // 标记为编辑状态

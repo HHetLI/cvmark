@@ -24,6 +24,13 @@ npm run lint
 npm run format
 ```
 
+运行测试（Vitest + jsdom）：
+
+```bash
+npm run test        # 单次运行
+npm run test:watch  # 监听模式
+```
+
 ## API 方法
 
 有关 API 方法、参数和返回类型的详细信息，请查看 `src/core/canvas.ts` 文件。
@@ -32,7 +39,8 @@ npm run format
 
 - `html()` - 获取画布的 HTML 元素
 - `setup()` - 设置画布的帧数据和对象状态
-- `bitmap(enable: boolean)` - 开启/关闭位图栅格化模式（将所有标注对象一次性渲染为二值位图预览）
+- `bitmap(enable: boolean)` - 开启/关闭位图栅格化模式。将所有标注对象一次性光栅化到单个 canvas 作为**二值预览**（黑底 + 白轮廓）。
+  - 行为约束：是**纯预览、非交互、置顶覆盖层**——它盖在可交互的 SVG `content` 之上，只用于查看标注覆盖/密度；编辑、拖拽控制点等交互时请先**关闭位图模式**（`bitmap(false)`）。
 - `isAbleToChangeFrame()` - 检查是否可以切换帧
 - `draw()` - 绘制图形
 - `edit()` - 编辑图形
@@ -59,6 +67,7 @@ npm run format
 - 标签的类为 `cvat_canvas_tag`
 - 画布图像的 ID 为 `cvat_canvas_image`
 - 画布视频的 ID 为 `cvat_canvas_video`
+- 位图栅格化层的 ID 为 `cvat_canvas_bitmap`（`bitmap(true)` 时显示，二值预览）
 - 绘制时的十字准线的类为 `cvat_canvas_crosshair`
 - 要将元素固定到特定位置，可以使用 ID 为 `cvat_canvas_attachment_board` 的元素
 
@@ -124,7 +133,7 @@ canvas.draw({
 
 主要依赖项：
 
-- fabric.js - 用于 Canvas 操作
+- fabric.js (v7, ^7.4.0) - 用于 Canvas/mask 操作（代码按 fabric v7 API 适配，事件类型为 `TPointerEventInfo`）
 - svg.js - 用于 SVG 操作
 - svg.draw.js - 用于 SVG 绘图
 - svg.draggable.js - 用于 SVG 拖拽
