@@ -779,17 +779,18 @@ export class MasksHandlerImpl implements MasksHandler {
     });
 
     // 注册鼠标移动事件处理器
-    // fabric v7 类型未在 TPointerEventInfo 上声明 pointer（运行时提供），用可选交叉类型补齐
+    // fabric v7 用 scenePoint 提供画布坐标（v5 的 pointer 字段已移除，
+    // 该画布只用 CSS 做变换、viewportTransform 保持默认，故 scenePoint 即原 pointer 语义）
     this.canvas.on(
       "mouse:move",
-      (e: fabric.TPointerEventInfo & { pointer?: { x: number; y: number } }) => {
+      (e: fabric.TPointerEventInfo) => {
         // 获取图像尺寸和旋转角度
         const {
           image: { width: imageWidth, height: imageHeight },
         } = this.geometry!;
         const { angle } = this.geometry!;
         // 获取原始坐标
-        let [x, y] = [e.pointer?.x ?? 0, e.pointer?.y ?? 0];
+        let [x, y] = [e.scenePoint.x, e.scenePoint.y];
 
         // 根据图像旋转角度调整坐标
         if (angle === 180) {
@@ -829,7 +830,7 @@ export class MasksHandlerImpl implements MasksHandler {
           ["brush", "eraser"].includes(tool.type)
         ) {
           // 计算鼠标移动距离
-          const xDiff = (e.pointer?.x ?? 0) - this.resizeBrushToolLatestX;
+          const xDiff = e.scenePoint.x - this.resizeBrushToolLatestX;
           let onUpdateConfiguration = null;
           // 获取相应的配置更新回调
           if (this.isDrawing) {
@@ -848,7 +849,7 @@ export class MasksHandlerImpl implements MasksHandler {
           }
 
           // 更新最新的X坐标
-          this.resizeBrushToolLatestX = e.pointer?.x ?? 0;
+          this.resizeBrushToolLatestX = e.scenePoint.x;
           // 阻止事件冒泡
           (e.e as MouseEvent).stopPropagation();
           return;
