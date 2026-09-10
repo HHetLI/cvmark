@@ -41,7 +41,7 @@
     "fabric": "^7.4.0",
     "lodash": "^4.18.1",
     "polylabel": "^1.1.0",
-    "svg.draggable.js": "^3.0.0",
+    "svg.draggable.js": "^2.2.2",
     "svg.draw.js": "^2.0.4",
     "svg.js": "^2.7.1",
     "svg.resize.js": "^1.4.3",
